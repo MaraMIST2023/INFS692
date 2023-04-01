@@ -1,5 +1,6 @@
 ---
 title: "Model 3"
+author: "Mara Elali"
 output: pdf_document
 date: "2023-03-31"
 ---
@@ -8,22 +9,60 @@ date: "2023-03-31"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ClusterR)
+library(cluster)
+library(h2o) 
+library(readr)
+library(mclust)
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+```{r}
+#PCA
+rad_basket <- readr::read_csv("radiomics_completedata.csv")
+dim(rad_basket)  
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+rad_basket.h2o <- as.h2o(rad_basket)
+
+rad_pca <- h2o.prcomp(
+  training_frame = rad_basket.h2o,
+  pca_method = "GramSVD",
+  k = 197,
+  transform = "STANDARDIZE",
+  impute_missing = TRUE,
+  max_runtime_secs = 1000
+)
+
+summary(rad_pca)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+#seed
+set.seed(24)
+init <- sample(3, nrow(Y), replace = TRUE)
+plot(Y, col = init)
+#K-means
+radK <- kmeans(init, centers = 2, nstart = 20)
+str(radK)
+#cluster each observation
+radK$cluster
+```
+
+```{r}
+#hierarchical cluster
+radHC <- hclust(dist(init))
+radHC
+
+#K-means and hierarchical clustering are heuristic-base algorithms that create groupings based on the data provided with no measure of probability or uncertainty.
+```
+```{r}
+#model cluster
+radMB <- Mclust(init)
+radMB
+
+#In model-based clustering, observations have a probability of belonging to each group. These methods of unsupervised learning can be compared and evaluated using visualization and and mathematical techniques such as plotting, or comparing metrics such as RMSE.
+```

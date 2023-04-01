@@ -1,0 +1,128 @@
+---
+title: "Model 1"
+author: "Mara Elali"
+output: pdf_document
+date: "2023-03-31"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(glmnet)
+library(ROCR)   
+library(dplyr)
+library(ggplot2)
+library(rsample)
+library(recipes)
+library(vip)
+library(keras)
+library(caret)
+library(randomForest)
+library(h2o)
+```
+
+
+```{r}
+#Load the dataset
+radData <- read.csv("radiomics_completedata.csv")
+str(radData)
+#check first entries
+head(radData)
+#null and missing values
+na.omit(radData)
+#normalize
+rad <- radData %>% mutate_if(is.ordered, factor, ordered = FALSE)
+
+```
+```{r}
+set.seed(24)
+rad_split <- initial_split(rad, prop = 0.8,strata = "Failure.binary")
+rad_train <- training(rad_split)
+rad_test <- testing(rad_split)
+blueprint <- recipe(Failure.binary ~ ., data = rad_train) %>%
+  step_other(all_nominal(), threshold = 0.005)
+```
+
+```{r}
+h2o.init()
+train.h2o <- prep(blueprint, training = rad_train, retain = TRUE) %>%
+  juice() %>%
+  as.h2o()
+test.h2o <- prep(blueprint, training = rad_train) %>%
+  bake(new_data = rad_test) %>%
+  as.h2o()
+```
+
+```{r}
+Y <- "Failure.binary"
+X <- setdiff(names(rad_train), Y)
+```
+
+```{r}
+# Fit glm model
+rad_glm <- h2o.glm(
+  x = X, y = Y, training_frame = train.h2o, alpha = 0.1,
+  remove_collinear_columns = TRUE, nfolds = 10, fold_assignment = "Modulo",
+  keep_cross_validation_predictions = TRUE, seed = 24
+)
+
+```
+
+```{r}
+# Fit random forest model
+rad_rf <- h2o.randomForest(
+  x = X, y = Y, training_frame = train.h2o, ntrees = 1000, mtries = 20,
+  max_depth = 30, min_rows = 1, sample_rate =  0.8, nfolds = 10,
+  fold_assignment = "Modulo", keep_cross_validation_predictions = TRUE,
+  seed = 24, stopping_rounds = 50, stopping_metric = "RMSE",
+  stopping_tolerance = 0
+)
+```
+
+```{r}
+rad_gbm <- h2o.gbm(
+  x = X, y = Y, training_frame = train.h2o, ntrees = 5000, learn_rate = 0.01,
+  max_depth = 7, min_rows = 5, sample_rate = 0.8, nfolds = 10,
+  fold_assignment = "Modulo", keep_cross_validation_predictions = TRUE,
+  seed = 24, stopping_rounds = 50, stopping_metric = "RMSE",
+  stopping_tolerance = 0
+)
+```
+
+```{r}
+summary(
+  resamples(
+    list(
+      model1 = rad_glm,
+      model2 = rad_rf,
+      model3 = rad_gbm
+    )
+  )
+)$statistics$accuracy
+```
+
+```{r}
+get_rmse <- function(model) {
+  results <- h2o.performance(model, newdata = test.h2o)
+  results@metrics$RMSE
+}
+list(rad_glm, rad_rf, rad_gbm) %>%
+  purrr::map_dbl(get_rmse)
+
+ensemble <- h2o.stackedEnsemble(
+  x = X, y = Y, training_frame = train.h2o, base_models = list(rad_glm, rad_rf, rad_gbm)
+)
+
+h2o.performance(ensemble, newdata = test.h2o)@metrics$RMSE
+```
+
+```{r}
+# Make predictions using ensemble model
+ensemblePred <- predict(ensemble, rad_test)
+
+# Evaluate performance of ensemble model
+confusionMatrix(ensemblePred, rad_test$Failure.binary)
+```
