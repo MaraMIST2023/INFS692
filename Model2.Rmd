@@ -14,6 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tensorflow)
 library(keras)
 library(dplyr)  
+library(rsample)
 ```
 
 
@@ -92,7 +93,6 @@ model %>% compile(
 ```
 
 ```{r}
-
 
 history <- model %>% 
   fit(x = X,  

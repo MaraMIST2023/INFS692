@@ -26,6 +26,7 @@ library(mclust)
 rad_basket <- readr::read_csv("radiomics_completedata.csv")
 dim(rad_basket)  
 
+h2o.init()
 rad_basket.h2o <- as.h2o(rad_basket)
 
 rad_pca <- h2o.prcomp(
@@ -41,12 +42,10 @@ summary(rad_pca)
 ```
 
 ```{r}
-#seed
 set.seed(24)
-init <- sample(3, nrow(Y), replace = TRUE)
-plot(Y, col = init)
+data <- matrix(rnorm(200), ncol = 2)
 #K-means
-radK <- kmeans(init, centers = 2, nstart = 20)
+radK <- kmeans(data, centers = 3, nstart = 20)
 str(radK)
 #cluster each observation
 radK$cluster
@@ -54,14 +53,14 @@ radK$cluster
 
 ```{r}
 #hierarchical cluster
-radHC <- hclust(dist(init))
+radHC <- hclust(dist(data))
 radHC
 
 #K-means and hierarchical clustering are heuristic-base algorithms that create groupings based on the data provided with no measure of probability or uncertainty.
 ```
 ```{r}
 #model cluster
-radMB <- Mclust(init)
+radMB <- Mclust(data)
 radMB
 
 #In model-based clustering, observations have a probability of belonging to each group. These methods of unsupervised learning can be compared and evaluated using visualization and and mathematical techniques such as plotting, or comparing metrics such as RMSE.
